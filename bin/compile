@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+set -eo pipefail
+
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+BP_DIR=$(cd $(dirname $0); cd ..; pwd)
+
+# Output helpers
+indent() {
+  sed -u 's/^/       /'
+}
+
+puts_step() {
+  echo "-----> $@"
+}
+
+puts_info() {
+  echo "       $@"
+}
+
+# Python version (default to 3.11 if not specified)
+PYTHON_VERSION=${PYTHON_VERSION:-3.11}
+
+puts_step "Detected Python Flask app with pyproject.toml"
+
+# Check if runtime.txt exists for Python version specification
+if [ -f "$BUILD_DIR/runtime.txt" ]; then
+  PYTHON_VERSION=$(cat "$BUILD_DIR/runtime.txt" | sed 's/python-//')
+  puts_info "Using Python version from runtime.txt: $PYTHON_VERSION"
+else
+  puts_info "Using default Python version: $PYTHON_VERSION"
+fi
+
+# Set up Python environment
+puts_step "Installing Python $PYTHON_VERSION"
+
+# Check if Python is already installed
+if command -v python3 &> /dev/null; then
+  INSTALLED_VERSION=$(python3 --version | cut -d' ' -f2)
+  puts_info "Python $INSTALLED_VERSION already installed"
+else
+  puts_info "Python not found in environment"
+fi
+
+# Create virtual environment
+puts_step "Creating virtual environment"
+python3 -m venv "$BUILD_DIR/.heroku/python" | indent
+
+# Activate virtual environment
+export PATH="$BUILD_DIR/.heroku/python/bin:$PATH"
+export VIRTUAL_ENV="$BUILD_DIR/.heroku/python"
+
+puts_info "Virtual environment created at $VIRTUAL_ENV"
+
+# Upgrade pip
+puts_step "Upgrading pip"
+pip install --upgrade pip | indent
+
+# Install build dependencies
+puts_step "Installing build tools"
+pip install --upgrade setuptools wheel build | indent
+
+# Install dependencies from pyproject.toml
+puts_step "Installing dependencies from pyproject.toml"
+
+if [ -f "$BUILD_DIR/pyproject.toml" ]; then
+  cd "$BUILD_DIR"
+  
+  # Check if we should install in editable mode or as a package
+  if grep -q "\[project\]" pyproject.toml || grep -q "\[tool.poetry\]" pyproject.toml; then
+    puts_info "Installing project with dependencies"
+    pip install . | indent
+  else
+    puts_info "Installing dependencies only"
+    pip install . | indent
+  fi
+  
+  puts_info "Dependencies installed successfully"
+else
+  puts_info "No pyproject.toml found, skipping dependency installation"
+fi
+
+# Install gunicorn for production serving (if not already installed)
+puts_step "Installing gunicorn for production"
+pip install gunicorn | indent
+
+# Create .profile.d directory for runtime environment
+puts_step "Creating runtime environment configuration"
+mkdir -p "$BUILD_DIR/.profile.d"
+
+cat > "$BUILD_DIR/.profile.d/python.sh" <<EOF
+export PATH="\$HOME/.heroku/python/bin:\$PATH"
+export VIRTUAL_ENV="\$HOME/.heroku/python"
+export PYTHONUNBUFFERED=1
+export PYTHONHOME="\$HOME/.heroku/python"
+EOF
+
+puts_info "Runtime environment configured"
+
+# Store build metadata
+puts_step "Storing build metadata"
+echo "$PYTHON_VERSION" > "$BUILD_DIR/.heroku/python-version"
+
+puts_step "Build complete!"
+puts_info "To run your app, use: gunicorn app:app"
+

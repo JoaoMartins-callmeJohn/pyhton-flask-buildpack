@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# bin/detect <build-dir>
+
+BUILD_DIR=$1
+
+if [ -f "$BUILD_DIR/pyproject.toml" ]; then
+  echo "Python (pyproject.toml)"
+  exit 0
+else
+  exit 1
+fi
+
