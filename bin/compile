@@ -45,9 +45,31 @@ else
   puts_info "Python not found in environment"
 fi
 
+# Bootstrap pip if it's not available
+puts_step "Bootstrapping pip"
+if ! python3 -m pip --version &> /dev/null; then
+  puts_info "pip not found, bootstrapping..."
+  
+  # Try ensurepip first
+  if python3 -m ensurepip --version &> /dev/null 2>&1; then
+    puts_info "Using ensurepip to bootstrap pip"
+    python3 -m ensurepip --upgrade --default-pip 2>&1 | indent
+  else
+    # Fall back to get-pip.py
+    puts_info "Downloading get-pip.py"
+    curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+    python3 /tmp/get-pip.py --user 2>&1 | indent
+    rm /tmp/get-pip.py
+    export PATH="$HOME/.local/bin:$PATH"
+  fi
+else
+  puts_info "pip is already available"
+fi
+
 # Install pip and virtualenv to user directory first
 puts_step "Setting up Python environment"
-python3 -m pip install --user --upgrade pip virtualenv | indent
+python3 -m pip install --user --upgrade pip virtualenv 2>&1 | indent
+export PATH="$HOME/.local/bin:$PATH"
 
 # Create virtual environment using virtualenv (more portable than venv)
 puts_step "Creating virtual environment"

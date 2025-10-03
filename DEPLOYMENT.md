@@ -87,6 +87,12 @@ dokku buildpacks:list <app-name>
 ### Virtual environment errors
 The buildpack uses `virtualenv` instead of `venv` to avoid dependency on system packages like `python3-venv`. This makes it work reliably in containerized environments.
 
+### "No module named pip" errors
+The buildpack automatically bootstraps pip if it's not available:
+1. First tries `ensurepip` (Python's built-in pip installer)
+2. Falls back to downloading `get-pip.py` from pypa.io
+This ensures the buildpack works even in minimal container images.
+
 ### Build logs
 To see detailed build logs:
 ```bash
